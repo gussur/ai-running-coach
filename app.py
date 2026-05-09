@@ -17,7 +17,7 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash')
-REDIRECT_URI = 'https://ai-running-coach-6aa7.onrender.com/callback'
+REDIRECT_URI = 'https://ai-running-coach-m662.onrender.com/callback'
 
 # --- CSS GLOBAL UNTUK UI PREMIUM ---
 CSS_STYLE = """
