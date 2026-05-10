@@ -116,32 +116,32 @@ def callback():
     aktivitas_hari_ini = [act for act in activities if act.get('start_date_local', '').startswith(hari_ini_str)]
     tipe_label = {'Run': '🏃 Lari', 'Swim': '🏊 Renang', 'Ride': '🚴 Sepeda', 'Walk': '🚶 Jalan', 'Hike': '🧗 Mendaki'}
 
-    # Ekstraksi Data Historis untuk AI
-    diary_lari, diary_renang, diary_lain = [], [], []
-    for act in activities:
-        t_asli = act.get('type')
-        tgl = act.get('start_date_local', '')[:10]
-        jarak = act.get('distance', 0) / 1000
-        waktu = act.get('moving_time', 0) / 60
-        hr = act.get('average_heartrate', 0)
-        
-        if t_asli == 'Run': diary_lari.append(f"Tgl {tgl}: Jarak {jarak:.1f}km, Waktu {waktu:.0f}mnt, AvgHR {hr}bpm")
-        elif t_asli == 'Swim': diary_renang.append(f"Tgl {tgl}: Jarak {jarak*1000:.0f}m, Waktu {waktu:.0f}mnt")
-        else: diary_lain.append(f"Tgl {tgl}: {t_asli} selama {waktu:.0f}mnt")
-
-    teks_lari = '\n'.join(diary_lari) if diary_lari else "Tidak ada"
-    teks_renang = '\n'.join(diary_renang) if diary_renang else "Tidak ada"
-
     if aktivitas_hari_ini:
-        tipe_analisis = "Sesi Hari Ini"
-        act_today = aktivitas_hari_ini[0]
-        jarak_km = round(act_today.get('distance', 0) / 1000, 2)
-        waktu_menit = round(act_today.get('moving_time', 0) / 60, 1)
-        tipe_olahraga = act_today.get('type')
-        tampilan_ui_teks = f"<b>{tipe_label.get(tipe_olahraga, tipe_olahraga)}</b> &bull; {jarak_km} km &bull; {waktu_menit} menit"
+        tipe_analisis = f"Sesi Hari Ini ({len(aktivitas_hari_ini)} Aktivitas)"
         
-        prompt = f"""Kamu analis olahraga untuk usia {user_age} tahun. Hari ini klien melakukan {tipe_olahraga} ({jarak_km}km, {waktu_menit} mnt).
-        Tulis evaluasi pemulihan. ATURAN KETAT: JANGAN gunakan markdown ```html. HANYA gunakan tag <h3>, <p>, <ul>, <li>, <strong>. DILARANG menggunakan inline style atau CSS kotak-kotak."""
+        # Gabungkan semua statistik aktivitas hari ini untuk dikirim ke AI
+        detail_hari_ini = []
+        ringkasan_ui = []
+        
+        for act in aktivitas_hari_ini:
+            t_asli = act.get('type')
+            j_km = round(act.get('distance', 0) / 1000, 2)
+            w_menit = round(act.get('moving_time', 0) / 60, 1)
+            hr_avg = act.get('average_heartrate', 0)
+            
+            detail_hari_ini.append(f"- {t_asli}: {j_km}km, {w_menit}mnt, HR {hr_avg}bpm")
+            ringkasan_ui.append(f"<b>{tipe_label.get(t_asli, t_asli)}</b> ({j_km}km)")
+
+        tampilan_ui_teks = " | ".join(ringkasan_ui)
+        teks_untuk_ai = "\n".join(detail_hari_ini)
+        
+        prompt = f"""
+        Kamu pelatih olahraga usia {user_age} tahun. Hari ini klien sangat produktif dan melakukan beberapa sesi:
+        {teks_untuk_ai}
+        
+        Berikan evaluasi menyeluruh untuk semua sesi hari ini. Analisis apakah kombinasi olahraga ini baik untuk pemulihan atau justru terlalu berat.
+        ATURAN KETAT: JANGAN gunakan markdown ```html. Gunakan tag <h3>, <p>, <ul>, <li>, <strong>.
+        """
     else:
         tipe_analisis = "Rekap YTD Komprehensif"
         rekap_ui = {}
