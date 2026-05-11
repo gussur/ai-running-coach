@@ -10,10 +10,10 @@ from fitparse import FitFile
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'kunci_rahasia_coach_ai_super_aman')
 
-# --- KONFIGURASI (GANTI DENGAN DATA KAMU) ---
-STRAVA_CLIENT_ID = '238033'
-STRAVA_CLIENT_SECRET = 'a4232274aaa68d05b8832d931b9620136780a647'
-GEMINI_API_KEY = 'AIzaSyAri81jKrN3XqbarvbC-nLqTmA3zuhb3v4'
+# --- KONFIGURASI API ---
+STRAVA_CLIENT_ID = os.environ.get('STRAVA_CLIENT_ID')
+STRAVA_CLIENT_SECRET = os.environ.get('STRAVA_CLIENT_SECRET')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
