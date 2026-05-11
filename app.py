@@ -181,10 +181,26 @@ def callback():
         tampilan_ui_teks = " | ".join(ringkasan_ui)
         teks_untuk_ai = "\n".join(detail_hari_ini)
         
-        prompt = f"""Kamu pelatih olahraga usia {user_age} tahun. Klien melakukan beberapa sesi hari ini:
+prompt = f"""
+        Kamu adalah Pelatih Lari Profesional (Sports Scientist). Klienmu adalah seorang pelari berusia {user_age} tahun.
+        Hari ini klienmu melakukan sesi olahraga berikut:
         {teks_untuk_ai}
-        Berikan evaluasi menyeluruh untuk sesi hari ini. Analisis apakah kombinasinya baik untuk pemulihan atau terlalu berat.
-        ATURAN KETAT: JANGAN gunakan markdown ```html. Gunakan tag HTML standar <h3>, <p>, <ul>, <li>, <strong>."""
+        
+        Tugasmu adalah memberikan analisis mendalam seperti pelatih elit.
+        
+        INSTRUKSI ANALISIS:
+        1. Ringkasan Performa: Evaluasi pace, jarak, dan durasi.
+        2. Analisis Detak Jantung: Hitung perkiraan HR Max klien (220 - {user_age}). Evaluasi apakah rata-rata HR-nya berada di zona yang aman (Aerobik/Zona 2) atau terlalu berat (Anaerobik/Tempo).
+        3. Evaluasi Keamanan: Beri tahu klien apakah intensitas ini aman dilakukan sering-sering atau rawan overtraining.
+        4. Rekomendasi Terarah & Latihan Kekuatan: Berikan 3 poin saran untuk sesi berikutnya. Salah satu poinnya WAJIB membahas Latihan Kekuatan (Strength Training). Berikan 3-4 CONTOH GERAKAN SPESIFIK beserta cara melakukannya secara singkat, yang paling aman, efektif, dan ramah sendi untuk pelari usia {user_age} tahun (misalnya fokus pada stabilitas pinggul, glutes, core, atau betis, hindari gerakan melompat tinggi).
+        
+        ATURAN FORMAT (SANGAT PENTING):
+        - Gunakan tag <h3> untuk judul setiap bagian (misal: <h3>📊 Ringkasan Performa</h3>).
+        - Gunakan tag <ul> dan <li> untuk daftar poin-poin agar rapi.
+        - Gunakan <strong> untuk menekankan angka penting atau metrik utama.
+        - Gunakan gaya bahasa yang suportif, analitis, dan profesional.
+        - JANGAN PERNAH menggunakan markdown ```html.
+        """
     
     else:
         # Jika tidak ada aktivitas hari ini, rekap YTD
@@ -267,18 +283,29 @@ def upload_file():
     j_km = round(data['distance_m'] / 1000, 2)
     w_mnt = round(data['duration_m'], 1)
 
-    prompt = f"""
-    Kamu pelatih ahli usia {user_age} tahun. Klien mengupload file aktivitas .FIT mentah.
-    Data:
-    - Jenis: {data['type']}
+prompt = f"""
+    Kamu adalah Pelatih Lari Profesional (Sports Scientist). Klienmu adalah seorang pelari berusia {user_age} tahun.
+    Klien mengupload file aktivitas .FIT mentah dengan data berikut:
+    - Jenis Olahraga: {data['type']}
     - Jarak: {j_km} km
     - Durasi: {w_mnt} menit
     - Detak Jantung Rata-rata: {data['avg_hr']} bpm
     - Detak Jantung Maksimal: {data['max_hr']} bpm
     - Kalori Terbakar: {data['calories']} kcal
 
-    Berikan analisis mendalam berdasar data di atas. Evaluasi zona jantungnya untuk usia tersebut.
-    JANGAN gunakan markdown ```html. Gunakan <h3>, <p>, <ul>, <li>.
+    Tugasmu adalah memberikan analisis mendalam dari data mentah ini.
+    
+    INSTRUKSI ANALISIS:
+    1. Ringkasan Performa: Nilai efisiensi dari pace dan durasinya untuk pelari usia {user_age} tahun.
+    2. Bedah Detak Jantung (HR): Hitung HR Max klien (220 - {user_age}). Berapa persen (rata-rata dan max) HR klien dari HR Max-nya? Jelaskan dia berada di zona apa.
+    3. Implikasi & Keamanan: Apakah sesi ini masuk kategori Easy, Tempo, atau Hard? Apakah aman dilakukan rutin?
+    4. Rekomendasi Terarah & Latihan Kekuatan: Berikan saran spesifik terkait distribusi latihan. WAJIB sertakan panduan Latihan Kekuatan (Strength Training) dengan 3-4 CONTOH GERAKAN SPESIFIK yang aman dan krusial untuk pelari seusia {user_age} tahun (fokus pada stabilitas, pencegahan cedera lutut/pinggul, contoh: Glute Bridges, Calf Raises, dll, jelaskan singkat manfaatnya).
+    
+    ATURAN FORMAT (SANGAT PENTING):
+    - Gunakan tag <h3> untuk judul setiap bagian.
+    - Gunakan tag <ul> dan <li> untuk daftar poin.
+    - Gunakan <strong> untuk menebalkan angka (seperti detak jantung atau pace).
+    - JANGAN PERNAH menggunakan markdown ```html. Tulis HTML murni.
     """
     
     ai_response = model.generate_content(prompt)
