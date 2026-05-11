@@ -284,28 +284,47 @@ def upload_file():
     w_mnt = round(data['duration_m'], 1)
 
 prompt = f"""
-    Kamu adalah Pelatih Lari Profesional (Sports Scientist). Klienmu adalah seorang pelari berusia {user_age} tahun.
-    Klien mengupload file aktivitas .FIT mentah dengan data berikut:
-    - Jenis Olahraga: {data['type']}
+    PERANMU SANGAT JELAS: Kamu adalah "AI Coach", sebuah sistem kecerdasan buatan. KAMU BUKAN MANUSIA DAN TIDAK MEMILIKI UMUR.
+    Pengguna yang datanya kamu analisis adalah manusia berusia {user_age} tahun.
+
+    Klien mengupload file aktivitas dengan data berikut:
+    - Olahraga: {data['type']}
     - Jarak: {j_km} km
     - Durasi: {w_mnt} menit
-    - Detak Jantung Rata-rata: {data['avg_hr']} bpm
-    - Detak Jantung Maksimal: {data['max_hr']} bpm
-    - Kalori Terbakar: {data['calories']} kcal
+    - HR Rata-rata: {data['avg_hr']} bpm
+    - HR Maksimal: {data['max_hr']} bpm
 
-    Tugasmu adalah memberikan analisis mendalam dari data mentah ini.
+    TUGAS UTAMA: Buatlah analisis berwujud "INFOGRAFIS HTML".
     
-    INSTRUKSI ANALISIS:
-    1. Ringkasan Performa: Nilai efisiensi dari pace dan durasinya untuk pelari usia {user_age} tahun.
-    2. Bedah Detak Jantung (HR): Hitung HR Max klien (220 - {user_age}). Berapa persen (rata-rata dan max) HR klien dari HR Max-nya? Jelaskan dia berada di zona apa.
-    3. Implikasi & Keamanan: Apakah sesi ini masuk kategori Easy, Tempo, atau Hard? Apakah aman dilakukan rutin?
-    4. Rekomendasi Terarah & Latihan Kekuatan: Berikan saran spesifik terkait distribusi latihan. WAJIB sertakan panduan Latihan Kekuatan (Strength Training) dengan 3-4 CONTOH GERAKAN SPESIFIK yang aman dan krusial untuk pelari seusia {user_age} tahun (fokus pada stabilitas, pencegahan cedera lutut/pinggul, contoh: Glute Bridges, Calf Raises, dll, jelaskan singkat manfaatnya).
-    
-    ATURAN FORMAT (SANGAT PENTING):
-    - Gunakan tag <h3> untuk judul setiap bagian.
-    - Gunakan tag <ul> dan <li> untuk daftar poin.
-    - Gunakan <strong> untuk menebalkan angka (seperti detak jantung atau pace).
-    - JANGAN PERNAH menggunakan markdown ```html. Tulis HTML murni.
+    ATURAN KETAT (JIKA DILANGGAR SISTEM AKAN ERROR):
+    1. DILARANG KERAS menggunakan tanda bintang (**) atau Markdown apa pun. Gunakan HANYA tag HTML <b> atau <strong> untuk menebalkan teks.
+    2. JANGAN PERNAH menyebutkan umurmu. Sebutkan usia klien ({user_age} tahun) dalam analisismu.
+    3. WAJIB gunakan format HTML di bawah ini persis sebagai template jawabanmu (isi bagian titik-titiknya dengan analisismu):
+
+    <div style="background: #ffffff; border-left: 5px solid #3182CE; padding: 18px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <h3 style="margin-top: 0; color: #2c5282;">🏃‍♂️ Ringkasan Kinerja</h3>
+        <p>... (berikan evaluasi efisiensi pace dan durasi di sini) ...</p>
+    </div>
+
+    <div style="background: #ffffff; border-left: 5px solid #E53E3E; padding: 18px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <h3 style="margin-top: 0; color: #9B2C2C;">❤️ Analisis Zona Jantung</h3>
+        <p>... (Hitung HR Max klien: 220 - {user_age}. Jelaskan angka {data['avg_hr']} bpm masuk zona apa untuknya) ...</p>
+    </div>
+
+    <div style="background: #ffffff; border-left: 5px solid #D69E2E; padding: 18px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <h3 style="margin-top: 0; color: #975A16;">🛡️ Evaluasi Keamanan</h3>
+        <p>... (Jelaskan apakah ini sesi Easy, Tempo, atau Hard. Apakah aman dilakukan sering-sering?) ...</p>
+    </div>
+
+    <div style="background: #ffffff; border-left: 5px solid #38A169; padding: 18px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <h3 style="margin-top: 0; color: #22543D;">💪 Panduan Strength Training (Usia {user_age}+)</h3>
+        <p>Untuk menunjang lari dan mencegah cedera di usia ini, lakukan 3 gerakan ramah sendi berikut:</p>
+        <ul>
+            <li><b>Gerakan 1:</b> ... (Sebutkan nama dan cara singkat) ...</li>
+            <li><b>Gerakan 2:</b> ... (Sebutkan nama dan cara singkat) ...</li>
+            <li><b>Gerakan 3:</b> ... (Sebutkan nama dan cara singkat) ...</li>
+        </ul>
+    </div>
     """
     
     ai_response = model.generate_content(prompt)
