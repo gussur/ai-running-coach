@@ -75,9 +75,6 @@ CSS_STYLE = """
 </style>
 """
 
-# ==========================================
-# RUTE 1: HALAMAN UTAMA (LANDING PAGE)
-# ==========================================
 @app.route('/')
 def home():
     return f'''
@@ -110,9 +107,6 @@ def home():
         </body></html>
     '''
 
-# ==========================================
-# RUTE 2: LOGIN STRAVA
-# ==========================================
 @app.route('/login')
 def login():
     age = request.args.get('age')
@@ -126,16 +120,12 @@ def login():
                 f"&state={age}")
     return redirect(auth_url)
 
-# ==========================================
-# RUTE 3: CALLBACK STRAVA & ANALISIS AI
-# ==========================================
 @app.route('/callback')
 def callback():
     code = request.args.get('code')
     user_age = request.args.get('state')
     if not code: return "Akses ditolak."
 
-    # 1. Dapatkan Token
     token_response = requests.post('https://www.strava.com/oauth/token', data={
         'client_id': STRAVA_CLIENT_ID, 'client_secret': STRAVA_CLIENT_SECRET, 'code': code, 'grant_type': 'authorization_code'
     }).json()
@@ -144,7 +134,6 @@ def callback():
     access_token = token_response.get('access_token')
     athlete_id = token_response.get('athlete', {}).get('id')
 
-    # Simpan Session
     if athlete_id:
         session['athlete_id'] = athlete_id
         conn = sqlite3.connect('coach_data.db')
@@ -152,7 +141,6 @@ def callback():
         c.execute("INSERT OR REPLACE INTO users (athlete_id, age) VALUES (?, ?)", (athlete_id, user_age))
         conn.commit(); conn.close()
 
-    # 2. Tarik Data YTD
     tahun_ini = datetime.now().year
     timestamp_after = int(time.mktime(datetime(tahun_ini, 1, 1).timetuple()))
     activities = requests.get(f'https://www.strava.com/api/v3/athlete/activities?after={timestamp_after}&per_page=200', headers={'Authorization': f'Bearer {access_token}'}).json()
@@ -163,7 +151,6 @@ def callback():
     aktivitas_hari_ini = [act for act in activities if act.get('start_date_local', '').startswith(hari_ini_str)]
     tipe_label = {'Run': '🏃 Lari', 'Swim': '🏊 Renang', 'Ride': '🚴 Sepeda', 'Walk': '🚶 Jalan', 'Hike': '🧗 Mendaki'}
 
-    # 3. Logika Analisis (Bisa mendeteksi banyak aktivitas hari ini)
     if aktivitas_hari_ini:
         tipe_analisis = f"Sesi Hari Ini ({len(aktivitas_hari_ini)} Aktivitas)"
         detail_hari_ini = []
@@ -181,29 +168,47 @@ def callback():
         tampilan_ui_teks = " | ".join(ringkasan_ui)
         teks_untuk_ai = "\n".join(detail_hari_ini)
         
-prompt = f"""
-        Kamu adalah Pelatih Lari Profesional (Sports Scientist). Klienmu adalah seorang pelari berusia {user_age} tahun.
-        Hari ini klienmu melakukan sesi olahraga berikut:
+        prompt = f"""
+        PERANMU SANGAT JELAS: Kamu adalah "AI Coach", sebuah sistem kecerdasan buatan. KAMU BUKAN MANUSIA DAN TIDAK MEMILIKI UMUR.
+        Pengguna yang datanya kamu analisis adalah manusia berusia {user_age} tahun.
+
+        Hari ini klien melakukan sesi olahraga berikut (Strava Data):
         {teks_untuk_ai}
+
+        TUGAS UTAMA: Buatlah analisis berwujud "INFOGRAFIS HTML".
         
-        Tugasmu adalah memberikan analisis mendalam seperti pelatih elit.
-        
-        INSTRUKSI ANALISIS:
-        1. Ringkasan Performa: Evaluasi pace, jarak, dan durasi.
-        2. Analisis Detak Jantung: Hitung perkiraan HR Max klien (220 - {user_age}). Evaluasi apakah rata-rata HR-nya berada di zona yang aman (Aerobik/Zona 2) atau terlalu berat (Anaerobik/Tempo).
-        3. Evaluasi Keamanan: Beri tahu klien apakah intensitas ini aman dilakukan sering-sering atau rawan overtraining.
-        4. Rekomendasi Terarah & Latihan Kekuatan: Berikan 3 poin saran untuk sesi berikutnya. Salah satu poinnya WAJIB membahas Latihan Kekuatan (Strength Training). Berikan 3-4 CONTOH GERAKAN SPESIFIK beserta cara melakukannya secara singkat, yang paling aman, efektif, dan ramah sendi untuk pelari usia {user_age} tahun (misalnya fokus pada stabilitas pinggul, glutes, core, atau betis, hindari gerakan melompat tinggi).
-        
-        ATURAN FORMAT (SANGAT PENTING):
-        - Gunakan tag <h3> untuk judul setiap bagian (misal: <h3>📊 Ringkasan Performa</h3>).
-        - Gunakan tag <ul> dan <li> untuk daftar poin-poin agar rapi.
-        - Gunakan <strong> untuk menekankan angka penting atau metrik utama.
-        - Gunakan gaya bahasa yang suportif, analitis, dan profesional.
-        - JANGAN PERNAH menggunakan markdown ```html.
+        ATURAN KETAT:
+        1. DILARANG KERAS menggunakan tanda bintang (**) atau Markdown apa pun. Gunakan HANYA tag HTML <b> atau <strong>.
+        2. JANGAN PERNAH menyebutkan umurmu. Sebutkan usia klien ({user_age} tahun) dalam analisismu.
+        3. WAJIB gunakan format HTML di bawah ini persis sebagai template jawabanmu:
+
+        <div style="background: #ffffff; border-left: 5px solid #3182CE; padding: 18px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; color: #2c5282;">🏃‍♂️ Ringkasan Kinerja</h3>
+            <p>... (berikan evaluasi performa keseluruhan di sini) ...</p>
+        </div>
+
+        <div style="background: #ffffff; border-left: 5px solid #E53E3E; padding: 18px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; color: #9B2C2C;">❤️ Analisis Zona Jantung</h3>
+            <p>... (Hitung HR Max klien: 220 - {user_age}. Jelaskan rata-rata HR masuk zona apa untuknya) ...</p>
+        </div>
+
+        <div style="background: #ffffff; border-left: 5px solid #D69E2E; padding: 18px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; color: #975A16;">🛡️ Evaluasi Keamanan</h3>
+            <p>... (Jelaskan apakah sesi ini aman untuk dirutinkan atau rawan overtraining) ...</p>
+        </div>
+
+        <div style="background: #ffffff; border-left: 5px solid #38A169; padding: 18px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; color: #22543D;">💪 Panduan Strength Training (Usia {user_age}+)</h3>
+            <p>Untuk mencegah cedera di usia ini, lakukan 3 gerakan ramah sendi berikut (hindari gerakan melompat):</p>
+            <ul>
+                <li><b>Gerakan 1:</b> ... (Sebutkan nama dan cara singkat) ...</li>
+                <li><b>Gerakan 2:</b> ... (Sebutkan nama dan cara singkat) ...</li>
+                <li><b>Gerakan 3:</b> ... (Sebutkan nama dan cara singkat) ...</li>
+            </ul>
+        </div>
         """
     
     else:
-        # Jika tidak ada aktivitas hari ini, rekap YTD
         tipe_analisis = "Rekap YTD Komprehensif"
         rekap_ui = {}
         diary_lari, diary_renang = [], []
@@ -225,16 +230,17 @@ prompt = f"""
         teks_lari = '\n'.join(diary_lari) if diary_lari else "Tidak ada"
         teks_renang = '\n'.join(diary_renang) if diary_renang else "Tidak ada"
         
-        prompt = f"""Kamu Sports Analyst untuk usia {user_age} tahun. Evaluasi data YTD ini:
+        prompt = f"""Kamu adalah AI Sports Analyst. Klienmu berusia {user_age} tahun. Evaluasi data YTD ini:
         LARI: {teks_lari}
         RENANG: {teks_renang}
         ATURAN KETAT: JANGAN gunakan markdown ```html. Gunakan HTML standar <h3>, <p>, <ul>, <li>."""
 
-    # Generate AI
-    ai_response = model.generate_content(prompt)
-    laporan_html = ai_response.text.replace("```html", "").replace("```", "").strip()
+    try:
+        ai_response = model.generate_content(prompt)
+        laporan_html = ai_response.text.replace("```html", "").replace("```", "").strip()
+    except Exception as e:
+        return f"<h1>SERVER MENGAKU ERROR:</h1><p>{str(e)}</p>"
 
-    # Simpan Report
     if athlete_id:
         conn = sqlite3.connect('coach_data.db'); c = conn.cursor()
         c.execute("INSERT INTO reports (athlete_id, tanggal, tipe_analisis, laporan_html) VALUES (?, ?, ?, ?)", (athlete_id, hari_ini_str, tipe_analisis, laporan_html))
@@ -257,9 +263,6 @@ prompt = f"""
         </body></html>
     '''
 
-# ==========================================
-# RUTE 4: UPLOAD FILE .FIT
-# ==========================================
 @app.route('/upload', methods=['POST'])
 def upload_file():
     user_age = request.form.get('age') or "50"
@@ -270,20 +273,17 @@ def upload_file():
     temp_path = "temp_activity.fit"
     file.save(temp_path)
     
-    # Bedah data
     data = parse_fit_data(temp_path)
     
-    # Hapus file dengan aman
     if os.path.exists(temp_path): os.remove(temp_path)
 
-    # Jika hasil bedah berupa teks error
     if isinstance(data, str): 
         return f"Maaf, gagal membedah data: {data}"
 
     j_km = round(data['distance_m'] / 1000, 2)
     w_mnt = round(data['duration_m'], 1)
 
-prompt = f"""
+    prompt = f"""
     PERANMU SANGAT JELAS: Kamu adalah "AI Coach", sebuah sistem kecerdasan buatan. KAMU BUKAN MANUSIA DAN TIDAK MEMILIKI UMUR.
     Pengguna yang datanya kamu analisis adalah manusia berusia {user_age} tahun.
 
@@ -297,9 +297,9 @@ prompt = f"""
     TUGAS UTAMA: Buatlah analisis berwujud "INFOGRAFIS HTML".
     
     ATURAN KETAT (JIKA DILANGGAR SISTEM AKAN ERROR):
-    1. DILARANG KERAS menggunakan tanda bintang (**) atau Markdown apa pun. Gunakan HANYA tag HTML <b> atau <strong> untuk menebalkan teks.
+    1. DILARANG KERAS menggunakan tanda bintang (**) atau Markdown apa pun. Gunakan HANYA tag HTML <b> atau <strong>.
     2. JANGAN PERNAH menyebutkan umurmu. Sebutkan usia klien ({user_age} tahun) dalam analisismu.
-    3. WAJIB gunakan format HTML di bawah ini persis sebagai template jawabanmu (isi bagian titik-titiknya dengan analisismu):
+    3. WAJIB gunakan format HTML di bawah ini persis sebagai template jawabanmu:
 
     <div style="background: #ffffff; border-left: 5px solid #3182CE; padding: 18px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <h3 style="margin-top: 0; color: #2c5282;">🏃‍♂️ Ringkasan Kinerja</h3>
@@ -327,8 +327,11 @@ prompt = f"""
     </div>
     """
     
-    ai_response = model.generate_content(prompt)
-    laporan = ai_response.text.replace("```html", "").replace("```", "").strip()
+    try:
+        ai_response = model.generate_content(prompt)
+        laporan = ai_response.text.replace("```html", "").replace("```", "").strip()
+    except Exception as e:
+        return f"<h1>SERVER MENGAKU ERROR:</h1><p>{str(e)}</p>"
 
     return f'''
         <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">{CSS_STYLE}</head><body>
@@ -346,9 +349,6 @@ prompt = f"""
         </body></html>
     '''
 
-# ==========================================
-# RUTE 5: RIWAYAT LAPORAN
-# ==========================================
 @app.route('/riwayat')
 def riwayat():
     athlete_id = session.get('athlete_id')
