@@ -1,231 +1,135 @@
-from flask import Flask, request, redirect, session
+import os
+from flask import Flask, request, redirect, session, render_template_string
 import requests
 import google.generativeai as genai
 from datetime import datetime
 import time
 import sqlite3
-import os # <-- Tambahkan ini
+from fitparse import FitFile # <-- Library baru untuk bedah file Garmin
 
 app = Flask(__name__)
-# Ambil secret key dari server, jika tidak ada pakai teks default
 app.secret_key = os.environ.get('SECRET_KEY', 'kunci_rahasia_coach_ai_super_aman')
 
-# --- KONFIGURASI AMAN (MENGAMBIL DARI BRANKAS SERVER) ---
-STRAVA_CLIENT_ID = os.environ.get('STRAVA_CLIENT_ID')
-STRAVA_CLIENT_SECRET = os.environ.get('STRAVA_CLIENT_SECRET')
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+# --- KONFIGURASI (GANTI DENGAN DATA KAMU) ---
+STRAVA_CLIENT_ID = '238033'
+STRAVA_CLIENT_SECRET = 'a4232274aaa68d05b8832d931b9620136780a647'
+GEMINI_API_KEY = 'AIzaSyAri81jKrN3XqbarvbC-nLqTmA3zuhb3v4'
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash')
-REDIRECT_URI = 'https://ai-running-coach-m662.onrender.com/callback'
 
-# --- CSS GLOBAL UNTUK UI PREMIUM ---
+# --- FUNGSI BEDAH FILE .FIT ---
+def parse_fit_data(file_path):
+    try:
+        fitfile = FitFile(file_path)
+        data_ringkas = {
+            "type": "Aktivitas Luar",
+            "distance_m": 0,
+            "duration_m": 0,
+            "avg_hr": 0,
+            "max_hr": 0,
+            "calories": 0,
+            "recovery_time": 0 # Data recovery sering ada di file Garmin
+        }
+        
+        hr_list = []
+        for record in fitfile.get_messages('session'):
+            for data in record:
+                if data.name == 'total_distance': data_ringkas['distance_m'] = data.value
+                if data.name == 'total_timer_time': data_ringkas['duration_m'] = data.value / 60
+                if data.name == 'avg_heart_rate': data_ringkas['avg_hr'] = data.value
+                if data.name == 'max_heart_rate': data_ringkas['max_hr'] = data.value
+                if data.name == 'total_calories': data_ringkas['calories'] = data.value
+                if data.name == 'sport': data_ringkas['type'] = data.value
+
+        return data_ringkas
+    except Exception as e:
+        return f"Error bedah file: {str(e)}"
+
+# --- CSS (Ditambah gaya untuk Form Upload) ---
 CSS_STYLE = """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; color: #333; line-height: 1.6; margin: 0; padding: 20px; }
-    .container { max-width: 700px; margin: 40px auto; background: #ffffff; padding: 40px; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
-    h2, h3, h4 { color: #1a202c; }
-    .badge { display: inline-block; background: #FFF0E9; color: #FC4C02; padding: 6px 16px; border-radius: 20px; font-weight: 700; font-size: 0.85em; margin-bottom: 20px; letter-spacing: 0.5px;}
-    .stats-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 30px; text-align: center; }
-    .stats-box p { margin: 0; font-size: 1.05em; font-weight: 600; color: #4a5568; }
-    
-    /* Styling khusus untuk konten AI agar rapi */
-    .ai-content { color: #2d3748; font-size: 1.05em; }
-    .ai-content h3, .ai-content h4 { border-bottom: 2px solid #edf2f7; padding-bottom: 10px; margin-top: 30px; color: #2c5282; }
-    .ai-content ul { padding-left: 20px; }
-    .ai-content li { margin-bottom: 10px; }
-    .ai-content strong { color: #1a202c; }
-    
-    .btn-primary { background: #FC4C02; color: white; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: 600; display: inline-block; transition: 0.3s; width: 80%; max-width: 300px; text-align: center;}
-    .btn-primary:hover { background: #e34302; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(252, 76, 2, 0.3); }
-    .btn-outline { background: transparent; color: #FC4C02; border: 2px solid #FC4C02; padding: 12px 26px; border-radius: 12px; text-decoration: none; font-weight: 600; display: inline-block; transition: 0.3s; margin-left: 10px;}
-    .btn-outline:hover { background: #fff5f0; }
-    .actions { text-align: center; margin-top: 40px; }
+    body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; }
+    .container { max-width: 700px; margin: 40px auto; background: #fff; padding: 40px; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
+    .btn-primary { background: #FC4C02; color: white; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: 600; display: block; width: 100%; border: none; cursor: pointer; margin-top: 10px;}
+    .upload-section { border: 2px dashed #cbd5e0; padding: 20px; border-radius: 12px; margin-top: 30px; text-align: center; }
+    .ai-content { margin-top: 30px; line-height: 1.7; }
 </style>
 """
-
-def init_db():
-    conn = sqlite3.connect('coach_data.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (athlete_id INTEGER PRIMARY KEY, age INTEGER)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS reports (id INTEGER PRIMARY KEY AUTOINCREMENT, athlete_id INTEGER, tanggal TEXT, tipe_analisis TEXT, laporan_html TEXT)''')
-    conn.commit()
-    conn.close()
-init_db()
 
 @app.route('/')
 def home():
     return f'''
-        <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">{CSS_STYLE}</head><body>
-        <div class="container" style="text-align: center; max-width: 450px;">
-            <h2 style="color: #FC4C02; font-size: 2em; margin-bottom: 10px;">AI Running Coach 40+</h2>
-            <p style="color: #718096; margin-bottom: 30px;">Pendamping cerdas untuk pelari usia matang.</p>
+        <!DOCTYPE html><html><head>{CSS_STYLE}</head><body>
+        <div class="container" style="max-width: 450px; text-align: center;">
+            <h2 style="color: #FC4C02;">AI Coach 40+</h2>
+            
             <form action="/login" method="GET">
-                <input type="number" name="age" placeholder="Masukkan Umur Anda (Contoh: 56)" required 
-                       style="padding: 15px; width: 80%; border-radius: 12px; border: 1px solid #cbd5e0; margin-bottom: 25px; font-size: 1.1em; text-align: center; outline: none;">
-                <br>
-                <button type="submit" class="btn-primary" style="width: 88%; border: none; cursor: pointer; font-size: 1.1em;">
-                    Hubungkan & Analisis
-                </button>
+                <input type="number" name="age" placeholder="Umur (Contoh: 56)" required style="padding: 15px; width: 85%; border-radius: 12px; border: 1px solid #ddd; margin-bottom: 10px;">
+                <button type="submit" class="btn-primary">Hubungkan Strava</button>
             </form>
+
+            <div class="upload-section">
+                <p style="font-weight: bold; margin-top: 0;">Analisis Mendalam (.FIT)</p>
+                <form action="/upload" method="POST" enctype="multipart/form-data">
+                    <input type="number" name="age" placeholder="Umur" required style="width: 50%; margin-bottom: 10px; padding: 5px;">
+                    <input type="file" name="file_fit" accept=".fit" required style="font-size: 0.8em; margin-bottom: 10px;">
+                    <button type="submit" style="background: #2d3748; color: white; padding: 10px; border-radius: 8px; cursor: pointer; border: none; width: 100%;">Upload & Bedah File</button>
+                </form>
+                <p style="font-size: 0.7em; color: #718096; margin-top: 10px;">Gunakan file asli dari Garmin/Coros untuk data HR lebih detail.</p>
+            </div>
         </div>
         </body></html>
     '''
 
-@app.route('/login')
-def login():
-    age = request.args.get('age')
-    # Mengambil URL otomatis (localhost atau url asli dari Render nanti)
-    redirect_uri_dinamis = request.host_url + 'callback'
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    user_age = request.form.get('age')
+    file = request.files.get('file_fit')
     
-    auth_url = (f"https://www.strava.com/oauth/authorize?client_id={STRAVA_CLIENT_ID}"
-                f"&response_type=code&redirect_uri={redirect_uri_dinamis}"
-                f"&approval_prompt=force&scope=activity:read_all"
-                f"&state={age}")
-    return redirect(auth_url)
-
-@app.route('/callback')
-def callback():
-    code = request.args.get('code')
-    user_age = request.args.get('state')
-    if not code: return "Akses ditolak."
-
-    token_response = requests.post('https://www.strava.com/oauth/token', data={
-        'client_id': STRAVA_CLIENT_ID, 'client_secret': STRAVA_CLIENT_SECRET, 'code': code, 'grant_type': 'authorization_code'
-    }).json()
+    if not file: return "File tidak ditemukan."
     
-    if 'access_token' not in token_response: return f"Gagal masuk Strava. Error: {token_response}"
-    access_token = token_response.get('access_token')
-    athlete_id = token_response.get('athlete', {}).get('id')
-
-    if athlete_id:
-        session['athlete_id'] = athlete_id
-        conn = sqlite3.connect('coach_data.db')
-        c = conn.cursor()
-        c.execute("INSERT OR REPLACE INTO users (athlete_id, age) VALUES (?, ?)", (athlete_id, user_age))
-        conn.commit(); conn.close()
-
-    tahun_ini = datetime.now().year
-    timestamp_after = int(time.mktime(datetime(tahun_ini, 1, 1).timetuple()))
-    activities = requests.get(f'https://www.strava.com/api/v3/athlete/activities?after={timestamp_after}&per_page=200', headers={'Authorization': f'Bearer {access_token}'}).json()
+    # Simpan sementara
+    temp_path = "temp_activity.fit"
+    file.save(temp_path)
     
-    if isinstance(activities, dict) and 'message' in activities: return "Gagal menarik data Strava."
+    # Bedah data menggunakan fungsi fitparse tadi
+    data = parse_fit_data(temp_path)
+    os.remove(temp_path) # Hapus file setelah dibedah agar hemat memori
 
-    hari_ini_str = datetime.now().strftime('%Y-%m-%d')
-    aktivitas_hari_ini = [act for act in activities if act.get('start_date_local', '').startswith(hari_ini_str)]
-    tipe_label = {'Run': '🏃 Lari', 'Swim': '🏊 Renang', 'Ride': '🚴 Sepeda', 'Walk': '🚶 Jalan', 'Hike': '🧗 Mendaki'}
+    if isinstance(data, str): return data # Jika error
 
-    if aktivitas_hari_ini:
-        tipe_analisis = f"Sesi Hari Ini ({len(aktivitas_hari_ini)} Aktivitas)"
-        
-        # Gabungkan semua statistik aktivitas hari ini untuk dikirim ke AI
-        detail_hari_ini = []
-        ringkasan_ui = []
-        
-        for act in aktivitas_hari_ini:
-            t_asli = act.get('type')
-            j_km = round(act.get('distance', 0) / 1000, 2)
-            w_menit = round(act.get('moving_time', 0) / 60, 1)
-            hr_avg = act.get('average_heartrate', 0)
-            
-            detail_hari_ini.append(f"- {t_asli}: {j_km}km, {w_menit}mnt, HR {hr_avg}bpm")
-            ringkasan_ui.append(f"<b>{tipe_label.get(t_asli, t_asli)}</b> ({j_km}km)")
+    # Racik Prompt untuk AI dengan data lebih detail
+    prompt = f"""
+    Kamu pelatih ahli usia {user_age} tahun. Saya baru saja mengupload file aktivitas .FIT mentah.
+    Data yang ditemukan:
+    - Jenis: {data['type']}
+    - Jarak: {round(data['distance_m']/1000, 2)} km
+    - Durasi: {round(data['duration_m'], 1)} menit
+    - Detak Jantung Rata-rata: {data['avg_hr']} bpm
+    - Detak Jantung Maksimal: {data['max_hr']} bpm
+    - Kalori Terbakar: {data['calories']} kcal
 
-        tampilan_ui_teks = " | ".join(ringkasan_ui)
-        teks_untuk_ai = "\n".join(detail_hari_ini)
-        
-        prompt = f"""
-        Kamu pelatih olahraga usia {user_age} tahun. Hari ini klien sangat produktif dan melakukan beberapa sesi:
-        {teks_untuk_ai}
-        
-        Berikan evaluasi menyeluruh untuk semua sesi hari ini. Analisis apakah kombinasi olahraga ini baik untuk pemulihan atau justru terlalu berat.
-        ATURAN KETAT: JANGAN gunakan markdown ```html. Gunakan tag <h3>, <p>, <ul>, <li>, <strong>.
-        """
-    else:
-        tipe_analisis = "Rekap YTD Komprehensif"
-        rekap_ui = {}
-        for act in activities:
-            label = tipe_label.get(act.get('type'), '✨ Lain')
-            rekap_ui[label] = rekap_ui.get(label, 0) + 1
-        tampilan_ui_teks = " | ".join([f"<b>{k}</b>: {v}x" for k, v in rekap_ui.items()])
-        
-        prompt = f"""Kamu Sports Data Analyst untuk usia {user_age} tahun. Evaluasi data YTD ini:
-        LARI: {teks_lari}
-        RENANG: {teks_renang}
-        
-        ATURAN KETAT: 
-        1. JANGAN gunakan tag markdown ```html. Jangan tulis kata html.
-        2. HANYA gunakan tag HTML standar: <h3>, <h4>, <p>, <ul>, <li>, <strong>.
-        3. DILARANG menggunakan styling inline (seperti style="..."), flexbox, tabel, atau kolom.
-        4. Tulis dalam bentuk paragraf dan bullet points yang rapi dan mudah dibaca."""
-
+    Berikan analisis mendalam. Karena ini data mentah, evaluasi distribusi intensitasnya. 
+    Berikan saran spesifik untuk jantung usia {user_age} tahun. 
+    JANGAN gunakan markdown ```html. Gunakan <h3>, <p>, <ul>, <li>.
+    """
+    
     ai_response = model.generate_content(prompt)
-    laporan_html = ai_response.text
-
-    # --- PEMBERSIH MARKDOWN ---
-    # Ini memastikan kata ```html hilang dari layar
-    laporan_html = laporan_html.replace("```html", "").replace("```", "").strip()
-
-    if athlete_id:
-        conn = sqlite3.connect('coach_data.db'); c = conn.cursor()
-        c.execute("INSERT INTO reports (athlete_id, tanggal, tipe_analisis, laporan_html) VALUES (?, ?, ?, ?)", (athlete_id, hari_ini_str, tipe_analisis, laporan_html))
-        conn.commit(); conn.close()
+    laporan = ai_response.text.replace("```html", "").replace("```", "").strip()
 
     return f'''
-        <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">{CSS_STYLE}</head><body>
+        <!DOCTYPE html><html><head>{CSS_STYLE}</head><body>
         <div class="container">
-            <div style="text-align: center;">
-                <div class="badge">ANALISIS PELATIH</div>
-                <h2 style="margin-top: 0; margin-bottom: 25px;">{tipe_analisis}</h2>
-                <div class="stats-box"><p>{tampilan_ui_teks}</p></div>
-            </div>
-            
-            <div class="ai-content">
-                {laporan_html}
-            </div>
-            
-            <div class="actions">
-                <a href="/riwayat" class="btn-primary" style="background:#2d3748; width: auto; padding: 12px 24px;">Lihat Riwayat</a>
-                <a href="/" class="btn-outline">Cek Ulang</a>
+            <h2 style="text-align: center;">Analisis File Mentah</h2>
+            <div class="ai-content">{laporan}</div>
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="/" style="color: #FC4C02; text-decoration: none; font-weight: bold;">&larr; Kembali</a>
             </div>
         </div>
         </body></html>
     '''
 
-@app.route('/riwayat')
-def riwayat():
-    athlete_id = session.get('athlete_id')
-    if not athlete_id: return redirect('/')
-
-    conn = sqlite3.connect('coach_data.db'); c = conn.cursor()
-    c.execute("SELECT tanggal, tipe_analisis, laporan_html FROM reports WHERE athlete_id = ? ORDER BY id DESC", (athlete_id,))
-    data_riwayat = c.fetchall()
-    conn.close()
-
-    html_riwayat = ""
-    for baris in data_riwayat:
-        # Bersihkan markdown juga untuk data riwayat agar tidak merusak tampilan
-        isi = baris[2].replace("```html", "").replace("```", "").strip()
-        html_riwayat += f'''
-        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 25px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-            <div class="badge" style="background: #edf2f7; color: #4a5568; margin-bottom: 15px;">{baris[0]} &bull; {baris[1]}</div>
-            <div class="ai-content">{isi}</div>
-        </div>
-        '''
-
-    return f'''
-        <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">{CSS_STYLE}</head><body style="background: #f4f7f6;">
-        <div class="container" style="background: transparent; box-shadow: none; padding-top: 10px;">
-            <h2 style="text-align: center; color: #FC4C02;">Buku Harian Kebugaran</h2>
-            <p style="text-align: center; color: #718096; margin-bottom: 40px;">Rekam jejak saran dari AI Coach Anda.</p>
-            {html_riwayat}
-            <div class="actions">
-                <a href="/" class="btn-outline" style="background: white;">&larr; Kembali ke Beranda</a>
-            </div>
-        </div>
-        </body></html>
-    '''
-
-if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+# (Route login & callback tetap sama untuk fungsi Strava kamu)
+# ...
