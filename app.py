@@ -224,8 +224,93 @@ def callback():
         </div>
         """
     else:
-        tipe_analisis = "REKAP TAHUN INI"
-        prompt = f"Klien usia {user_age}. Evaluasi YTD. JANGAN pakai markdown. Gunakan HTML <h3> dan <ul>."
+        tipe_analisis = "REKAP KEBUGARAN (YTD)"
+        
+        # --- Tarik dan Kelompokkan Semua Jenis Olahraga (YTD) ---
+        total_sesi = len(activities)
+        rekap_olahraga = {}
+        detail_terakhir = []
+        
+        for act in activities:
+            tipe = act.get('type', 'Lainnya')
+            j_km = act.get('distance', 0) / 1000
+            
+            # Hitung total jarak & sesi per jenis olahraga
+            if tipe not in rekap_olahraga:
+                rekap_olahraga[tipe] = {'jarak': 0, 'sesi': 0}
+            rekap_olahraga[tipe]['jarak'] += j_km
+            rekap_olahraga[tipe]['sesi'] += 1
+            
+        # Ubah data rekap jadi teks untuk AI
+        teks_rekap = []
+        for tipe, data in rekap_olahraga.items():
+            teks_rekap.append(f"- {tipe}: {data['sesi']} sesi ({data['jarak']:.2f} km)")
+        teks_rekap_str = "\n".join(teks_rekap) if teks_rekap else "- Belum ada data olahraga."
+        
+        # Ambil 10 aktivitas terakhir untuk melihat tren HR
+        for act in activities[:10]:
+            tgl = act.get('start_date_local', '')[:10]
+            tipe = act.get('type', 'Aktivitas')
+            j_km = act.get('distance', 0) / 1000
+            hr = act.get('average_heartrate', 0)
+            detail_terakhir.append(f"{tgl} | {tipe} | {j_km:.2f}km | HR: {hr}bpm")
+            
+        teks_detail_str = '\n'.join(detail_terakhir) if detail_terakhir else "Belum ada aktivitas."
+
+        # --- PROMPT AI UNTUK MULTI-SPORT YTD ---
+        prompt = f"""
+        PERANMU: Kamu adalah "AI Coach" (Pelatih Kebugaran Multi-Sport). KAMU BUKAN KONSULTAN KEUANGAN. 
+        Klienmu berusia {user_age} tahun.
+        
+        Data Kebugaran Tahun Ini (YTD):
+        - Total Semua Sesi: {total_sesi} sesi
+        - Rekap per Olahraga:
+        {teks_rekap_str}
+        
+        - 10 Aktivitas Terakhir (Untuk tren jantung):
+        {teks_detail_str}
+        
+        TUGAS UTAMA: Buat evaluasi kebugaran menyeluruh dalam bentuk INFOGRAFIS HTML.
+        
+        ATURAN FORMAT KETAT:
+        1. DILARANG menggunakan tanda bintang (**) atau Markdown. Gunakan tag HTML <b> atau <strong>.
+        2. Gunakan POIN-POIN (<ul> dan <li>).
+
+        WAJIB GUNAKAN TEMPLATE INI (Isi bagian ... dengan analisis tajam):
+
+        <div class="info-grid">
+            <div class="info-card card-performa">
+                <h3>📊 DISTRIBUSI YTD</h3>
+                <ul>
+                    <li><strong>Total Aktivitas:</strong> {total_sesi} sesi</li>
+                    <li>... (Sebutkan olahraga apa yang paling dominan dari data Rekap, berikan pujian) ...</li>
+                </ul>
+            </div>
+
+            <div class="info-card card-jantung">
+                <h3>❤️ TREN JANTUNG & INTENSITAS</h3>
+                <ul>
+                    <li>... (Evaluasi rata-rata HR dari 10 aktivitas terakhir, ingatkan soal zona aman usia {user_age}) ...</li>
+                </ul>
+            </div>
+
+            <div class="info-card card-strength">
+                <h3>💪 CROSS-TRAINING & STRENGTH</h3>
+                <p>Panduan penting untuk usia {user_age}+:</p>
+                <ul>
+                    <li><strong>Latihan Beban:</strong> Rutinkan 2x seminggu (Squat, Plank, Glute Bridge) untuk menjaga massa otot dan sendi.</li>
+                    <li>... (Berikan saran relevan berdasarkan jenis olahraga yang dia lakukan, misal sepeda bagus untuk lutut, dll) ...</li>
+                </ul>
+            </div>
+
+            <div class="info-card card-evaluasi">
+                <h3>🛡️ EVALUASI PELATIH</h3>
+                <ul>
+                    <li>... (Saran pemulihan, nutrisi, dan target kebugaran selanjutnya) ...</li>
+                </ul>
+            </div>
+        </div>
+        """
 
     try:
         ai_response = model.generate_content(prompt)
