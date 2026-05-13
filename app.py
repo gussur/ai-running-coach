@@ -157,34 +157,68 @@ def callback():
     
     if aktivitas_hari_ini:
         tipe_analisis = f"ANALISIS STRAVA HARI INI"
-        teks_untuk_ai = "\n".join([f"- {act.get('type')}: {round(act.get('distance',0)/1000,2)}km, {round(act.get('moving_time',0)/60,1)}mnt, HR {act.get('average_heartrate',0)}bpm" for act in aktivitas_hari_ini])
         
+        # --- LOGIKA KONVERSI WAKTU UNTUK STRAVA ---
+        detail_hari_ini = []
+        for act in aktivitas_hari_ini:
+            t_asli = act.get('type')
+            j_km = round(act.get('distance', 0) / 1000, 2)
+            hr_avg = act.get('average_heartrate', 0)
+            
+            total_detik = int(act.get('moving_time', 0))
+            jam = total_detik // 3600
+            menit = (total_detik % 3600) // 60
+            detik = total_detik % 60
+            waktu_format = f"{jam} Jam, {menit} Menit, {detik} Detik" if jam > 0 else f"{menit} Menit, {detik} Detik"
+            
+            detail_hari_ini.append(f"- Aktivitas: {t_asli} | Jarak: {j_km} km | Waktu: {waktu_format} | HR: {hr_avg} bpm")
+            
+        teks_untuk_ai = "\n".join(detail_hari_ini)
+        
+        # --- PROMPT KHUSUS STRAVA ---
         prompt = f"""
         PERANMU: Kamu adalah "AI Coach", sistem cerdas tanpa umur. Klienmu berusia {user_age} tahun.
-        Data Strava: {teks_untuk_ai}
-        TUGAS: Buat "INFOGRAFIS HTML". DILARANG menggunakan markdown/tanda bintang. 
-        WAJIB gunakan struktur HTML ini PERSIS (Isi bagian ... dengan analisismu):
+        Data Strava Hari Ini:
+        {teks_untuk_ai}
+        
+        TUGAS UTAMA: Buat analisis dalam bentuk INFOGRAFIS HTML.
+        
+        ATURAN FORMAT KETAT:
+        1. DILARANG menggunakan tanda bintang (**) atau Markdown. Gunakan tag HTML <b> atau <strong>.
+        2. Gunakan POIN-POIN (<ul> dan <li>) untuk setiap penjelasan agar mudah dibaca.
+
+        WAJIB GUNAKAN TEMPLATE INI (Isi bagian ... dengan analisis tajam):
 
         <div class="info-grid">
             <div class="info-card card-performa">
-                <h3>🏃‍♂️ PERFORMA</h3>
-                <p>... (Analisis performa pace dan jarak) ...</p>
-            </div>
-            <div class="info-card card-jantung">
-                <h3>❤️ JANTUNG</h3>
-                <div class="data-row">📈 <span>Max HR Klien: <span class="data-value">... bpm</span> (220-{user_age})</span></div>
-                <p>... (Evaluasi zona jantung) ...</p>
-            </div>
-            <div class="info-card card-evaluasi">
-                <h3>🛡️ EVALUASI</h3>
-                <p>... (Kesimpulan tingkat keamanan dan pemulihan) ...</p>
-            </div>
-            <div class="info-card card-strength">
-                <h3>💪 STRENGTH</h3>
-                <p>Latihan beban tanpa melompat untuk pelari matang:</p>
+                <h3>🏃‍♂️ ANALISIS PERFORMA</h3>
                 <ul>
-                    <li><b>Gerakan 1:</b> ...</li>
-                    <li><b>Gerakan 2:</b> ...</li>
+                    <li>... (Sebutkan rincian Waktu dan Jarak dari data, gunakan poin-poin untuk memuji/analisis pace) ...</li>
+                </ul>
+            </div>
+
+            <div class="info-card card-jantung">
+                <h3>❤️ ZONA JANTUNG</h3>
+                <ul>
+                    <li><strong>Prediksi HR Max:</strong> {220 - int(user_age)} bpm</li>
+                    <li>... (Evaluasi HR Rata-rata dari data di atas, apakah aman atau berisiko) ...</li>
+                </ul>
+            </div>
+
+            <div class="info-card card-strength">
+                <h3>💪 OPTIMASI & KESELAMATAN (Usia {user_age}+)</h3>
+                <p>Lakukan gerakan strength training berikut untuk melindungi sendi dan meningkatkan tenaga lari:</p>
+                <ul>
+                    <li><strong>Gerakan 1: Bodyweight Squats</strong> - Membangun kekuatan kaki dan gluteus, menjaga mobilitas sendi lutut dan pinggul. Fokus pada bentuk yang benar.</li>
+                    <li><strong>Gerakan 2: Plank</strong> - Menguatkan otot inti (core) untuk stabilitas lari dan postur, mengurangi risiko cedera punggung.</li>
+                    <li><strong>Gerakan 3: Glute Bridges</strong> - Mengaktifkan otot gluteus untuk dorongan lari yang lebih kuat dan perlindungan punggung bawah.</li>
+                </ul>
+            </div>
+
+            <div class="info-card card-evaluasi">
+                <h3>🛡️ REKOMENDASI PELATIH</h3>
+                <ul>
+                    <li>... (Gunakan poin-poin untuk saran istirahat dan nutrisi) ...</li>
                 </ul>
             </div>
         </div>
@@ -228,40 +262,60 @@ def upload_file():
 
     j_km = round(data['distance_m'] / 1000, 2)
     w_mnt = round(data['duration_m'], 1)
+    
+    # --- TAMBAHKAN LOGIKA KONVERSI WAKTU INI ---
+    total_detik = int(data['duration_m'] * 60)
+    jam = total_detik // 3600
+    menit = (total_detik % 3600) // 60
+    detik = total_detik % 60
+    waktu_format = f"{jam} Jam, {menit} Menit, {detik} Detik" if jam > 0 else f"{menit} Menit, {detik} Detik"
 
     prompt = f"""
     PERANMU: Kamu adalah "AI Coach", sistem cerdas tanpa umur. Klienmu berusia {user_age} tahun.
-    Data FIT: {data['type']}, Jarak {j_km} km, Waktu {w_mnt} menit, HR {data['avg_hr']} bpm.
-    TUGAS: Buat "INFOGRAFIS HTML". DILARANG menggunakan markdown/tanda bintang. 
-    WAJIB gunakan struktur HTML ini PERSIS TANPA DIUBAH KELASNYA:
+    Data Aktivitas: {data['type']}, Jarak {j_km} km, Waktu Total: {waktu_format}, HR Rata-rata {data['avg_hr']} bpm.
+    
+    TUGAS UTAMA: Buat analisis dalam bentuk INFOGRAFIS HTML.
+    
+    ATURAN FORMAT KETAT:
+    1. DILARANG menggunakan tanda bintang (**) atau Markdown. Gunakan tag HTML <b> atau <strong>.
+    2. Gunakan POIN-POIN (<ul> dan <li>) untuk setiap penjelasan agar mudah dibaca.
+    3. Konversi waktu yang diberikan ({waktu_format}) harus ditampilkan dengan jelas di bagian Performa.
+
+    WAJIB GUNAKAN TEMPLATE INI (Isi bagian ... dengan analisis tajam):
 
     <div class="info-grid">
         <div class="info-card card-performa">
-            <h3>🏃‍♂️ PERFORMA</h3>
-            <div class="data-row">📏 <span>Jarak: <span class="data-value">{j_km} km</span></span></div>
-            <div class="data-row">⏳ <span>Waktu: <span class="data-value">{w_mnt} mnt</span></span></div>
-            <p>... (Berikan pujian/analisis pace di sini) ...</p>
+            <h3>🏃‍♂️ ANALISIS PERFORMA</h3>
+            <ul>
+                <li><strong>Waktu Tempuh:</strong> {waktu_format}</li>
+                <li><strong>Jarak:</strong> {j_km} km</li>
+                <li>... (Gunakan poin-poin untuk memuji pencapaian dan analisis pace) ...</li>
+            </ul>
         </div>
 
         <div class="info-card card-jantung">
-            <h3>❤️ JANTUNG</h3>
-            <div class="data-row">💓 <span>HR Rata-rata: <span class="data-value">{data['avg_hr']} bpm</span></span></div>
-            <div class="data-row">📈 <span>Max HR Klien: <span class="data-value">... bpm</span> (220-{user_age})</span></div>
-            <p>... (Evaluasi zona latihan ini) ...</p>
-        </div>
-
-        <div class="info-card card-evaluasi">
-            <h3>🛡️ EVALUASI</h3>
-            <p>... (Kesimpulan aman/tidak dilakukan sering, butuh rest day/tidak) ...</p>
+            <h3>❤️ ZONA JANTUNG</h3>
+            <ul>
+                <li><strong>HR Rata-rata:</strong> {data['avg_hr']} bpm</li>
+                <li><strong>Prediksi HR Max:</strong> {220 - int(user_age)} bpm</li>
+                <li>... (Gunakan poin-poin untuk evaluasi zona intensitas) ...</li>
+            </ul>
         </div>
 
         <div class="info-card card-strength">
-            <h3>💪 STRENGTH</h3>
-            <p>Optimasi forma & keselamatan otot (usia {user_age}+):</p>
+            <h3>💪 OPTIMASI & KESELAMATAN (Usia {user_age}+)</h3>
+            <p>Lakukan gerakan strength training berikut untuk melindungi sendi dan meningkatkan tenaga lari:</p>
             <ul>
-                <li><b>Gerakan 1:</b> ...</li>
-                <li><b>Gerakan 2:</b> ...</li>
-                <li><b>Gerakan 3:</b> ...</li>
+                <li><strong>Gerakan 1: Bodyweight Squats</strong> - Membangun kekuatan kaki dan gluteus, menjaga mobilitas sendi lutut dan pinggul. Fokus pada bentuk yang benar.</li>
+                <li><strong>Gerakan 2: Plank</strong> - Menguatkan otot inti (core) untuk stabilitas lari dan postur, mengurangi risiko cedera punggung.</li>
+                <li><strong>Gerakan 3: Glute Bridges</strong> - Mengaktifkan otot gluteus untuk dorongan lari yang lebih kuat dan perlindungan punggung bawah.</li>
+            </ul>
+        </div>
+
+        <div class="info-card card-evaluasi">
+            <h3>🛡️ REKOMENDASI PELATIH</h3>
+            <ul>
+                <li>... (Gunakan poin-poin untuk saran istirahat dan nutrisi) ...</li>
             </ul>
         </div>
     </div>
